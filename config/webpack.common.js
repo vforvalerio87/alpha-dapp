@@ -14,12 +14,27 @@ module.exports = {
     filename: 'bundle.[chunkhash:8].js'
   },
 
+
+  resolve: {
+    alias: {
+      fs: "browserfs/dist/shims/fs.js",
+      buffer: "browserfs/dist/shims/buffer.js",
+      path: "browserfs/dist/shims/path.js",
+      processGlobal: "browserfs/dist/shims/process.js",
+      bufferGlobal: "browserfs/dist/shims/bufferGlobal.js",
+      bfsGlobal: require.resolve("browserfs")
+    }
+  },
+
   devtool: 'source-map',
   devServer: {
     contentBase: paths.outPath,
   },
 
   module: {
+
+    noParse: /browserfs\.js/,
+
     rules: [
       {
         test: /\.js$/,
@@ -68,6 +83,9 @@ module.exports = {
   },
 
   plugins: [
+
+    new webpack.ProvidePlugin({ BrowserFS: "bfsGlobal", process: "processGlobal", Buffer: "bufferGlobal" }),
+
     new HtmlWebpackPlugin({
       inject: true,
       template: path.join(paths.srcPath, 'index.html'),
@@ -84,5 +102,11 @@ module.exports = {
         minifyURLs: true,
       },
     }),
-  ]
+  ],
+
+  node: {
+    process: false,
+    Buffer: false
+  }
+
 };

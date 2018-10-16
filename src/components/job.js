@@ -1,4 +1,10 @@
 import React from 'react';
+
+import { grpc } from "grpc-web-client"
+
+import { ExampleService } from "./../resources/proto/ExampleService_pb_service.js"
+import { ClassifyRequest } from "./../resources/proto/ExampleService_pb.js"
+
 import agentAbi from 'singularitynet-platform-contracts/abi/Agent.json';
 import jobAbi from 'singularitynet-platform-contracts/abi/Job.json';
 import Eth from 'ethjs';
@@ -135,6 +141,8 @@ class Job extends React.Component {
 
   callApi(methodName, params) {
 
+    console.log("params:", params)
+
     let addressBytes = [];
     for(let i=2; i< this.state.jobAddress.length-1; i+=2) {
       addressBytes.push(parseInt(this.state.jobAddress.substr(i, 2), 16));
@@ -162,7 +170,9 @@ class Job extends React.Component {
         this.props.agent.contractInstance.validateJobInvocation(this.state.jobAddress, v, r, s, {from: this.props.account}).then(validateJob => {
           console.log('job invocation validation returned: ' + validateJob[0]);
 
+          /*
           let rpcClient = new JsonRpcClient({endpoint: this.props.agent.endpoint});
+          */
 
           // If agent is using old bytecode, put auth in params object. Otherwise, put auth in headers as new daemon
           // must be in use to support new signature scheme
@@ -172,6 +182,38 @@ class Job extends React.Component {
           let addlParams = bcSum === oldSigAgentBytecodeChecksum ? {job_address: this.state.jobAddress,
             job_signature: signature} : {};
 
+          const GRPC_HOST = this.props.agent.endpoint
+          const GRPC_SERVICE = ExampleService
+          const GRPC_METHOD = methodName
+
+          const classifyRequest = new ClassifyRequest()
+          classifyRequest.setImageType(params.image_type)
+          classifyRequest.setImage(params.image)
+          const request = classifyRequest
+
+          grpc.invoke(GRPC_SERVICE[GRPC_METHOD], {
+            request,
+            "host": GRPC_HOST,
+            "metadata": new grpc.Metadata({
+              "snet-job-address": this.state.jobAddress,
+              "snet-job-signature": signature
+            }),
+            "onMessage": message => {
+              const messageObject = message.toObject()
+              console.log(messageObject)
+              this.setState(() => ({
+                "jobResult": messageObject
+              }))
+              this.nextJobStep()
+            },
+            "onEnd": (code, msg, trailers) => {
+              if (!code == grpc.Code.OK) {
+                console.log("Error:", code, msg, trailers)
+              }
+            }
+          })
+
+          /*
           rpcClient.request(methodName, Object.assign({}, params, addlParams), Object.assign({}, callHeaders)).then(rpcResponse => {
 
             console.log(rpcResponse);
@@ -184,6 +226,7 @@ class Job extends React.Component {
           }).catch(rpcError => {
             console.log(rpcError);
           });
+          */
 
         });
       }).catch(this.handleReject);
